@@ -3,7 +3,7 @@ import threading
 import json
 
 class Server:
-    def __init__(self, host='127.0.0.1', port=1234):
+    def __init__(self, host='0.0.0.0', port=1234):
         self.host = host
         self.port = port
         self.clients = []
