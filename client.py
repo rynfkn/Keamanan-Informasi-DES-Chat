@@ -3,6 +3,7 @@ import threading
 import base64
 import json
 from DES import encrypt_text, decrypt_text
+import sys
 
 class Client:
     def __init__(self, host='127.0.0.1', port=1234):
@@ -28,6 +29,10 @@ class Client:
             })
             self.client_socket.send(key_data.encode('utf-8'))
 
+            print("="*25)
+            print(f"CONNECTED TO SERVER {self.host}:{self.port}")
+            print("="*25 + "\n")
+
             self.running = True
 
             receive_thread = threading.Thread(
@@ -38,37 +43,34 @@ class Client:
 
             return True
         except Exception as e:
-            print(f"FAILED CONNECTING TO SERVER: {e}")
+            print(f"[!] FAILED CONNECTING TO SERVER: {e}")
             return False
     
     def receive_message(self):
         while self.running:
             try:
                 data = self.client_socket.recv(4096)
+                if not data:
+                    break
+
                 message_data = json.loads(data.decode('utf-8'))
 
                 if message_data.get('type') == 'system':
-                    print(f"\n[SISTEM] {message_data.get('message')}\n> ", end='', flush=True)
+                    print(f"\n[SYSTEM] {message_data.get('message')}\n> ", end='', flush=True)
+                    continue
                 
                 else:
                     encrypted_text = message_data.get('encrypted_text', '')
                     sender_key = message_data.get('sender_key', '')
 
-                    try:
-                        decrypted_text = decrypt_text(encrypted_text, self.key)
-                        print("[KEY IS MATCH]")
-                        print(f"ENCRYPTED MESSAGE: {encrypted_text}")
-                        print(f"DECRYPTED MESSAGE: {decrypted_text}")
-                        print("> ", end='', flush=True)
-
-                    except:
-                        print(f"[KEY DOESN'T MATCH]")
-                        print(f"ENCRYPTED MESSAGE: {encrypted_text}")
-                        print("> ", end='', flush=True)
+                    decrypted = decrypt_text(encrypted_text, self.key)
+                    print(f"[ENCRYPTED MESSAGE]: {encrypted_text}")
+                    print(f"[DECRYPTED MESSAGE]: {decrypted}")
+                    print("> ", end='', flush=True)
 
             except Exception as e:
                 if self.running:
-                    print(f"ERROR RECEIVING MESSAGE: {e}")
+                    print(f"[!] ERROR RECEIVING MESSAGE: {e}")
                 break
 
         print("[!] LOST CONNECTION TO SERVER")
@@ -94,13 +96,13 @@ class Client:
                 message = input("> ")
                 
                 if message.lower() in ['quit', 'exit']:
-                    print(f"QUITING THE CHAT")
+                    print(f"[*] QUITING THE CHAT")
                     break
                 
                 if message.strip():
                     self.send_message(message)
         except KeyboardInterrupt:
-            print(f"CHAT STOPPED")
+            print(f"[*] CHAT STOPPED")
         finally:
             self.disconnect()
 
@@ -111,18 +113,28 @@ class Client:
 
 
 def main():
-    print("=" * 50)
-    print("  DES Encrypted Chat Client")
-    print("=" * 50)
-    print()
+    print("=====================================")
+    print("     DES CHAT CLIENT INTERFACE     ")
+    print("=====================================")
+
+    input_host = input("ENTER HOST (default=127.0.0.1) >> ") or "127.0.0.1"
+    input_port = input("ENTER PORT (default=1234) >> ") or "1234"
+
+    try:
+        port_num = int(input_port)
+        if not (0 < port_num < 65536):
+            raise ValueError("Invalid port range")
+    except ValueError:
+        print("[!] INVALID PORT. MUST BE A NUMBER BETWEEN 1–65535.")
+        sys.exit(1)
 
     key = input("Enter key (8 Character): ").strip()
 
     if len(key) != 8:
         print("[!] WARNING: KEY MUST BE 8 CHARACTER")
         return
-
-    client = Client()
+    
+    client = Client(host=input_host, port=port_num)
     
     if client.connect(key):
         client.start_chat()

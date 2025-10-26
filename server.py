@@ -1,13 +1,16 @@
 import socket
 import threading
 import json
+import sys
 
 class Server:
     def __init__(self, host='0.0.0.0', port=1234):
         self.host = host
         self.port = port
         self.clients = []
-        
+        self.server_socket = None
+    
+    def start(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind((self.host, self.port))
@@ -34,13 +37,9 @@ class Server:
                     continue
 
         except KeyboardInterrupt:
-            print("SERVER IS OFF")
+            print("[!] SERVER IS STOPPED")
         finally:
-            for client_socket, _, _ in self.clients:
-                client_socket.close()
-
-            if self.server_socket:
-                self.server_socket.close()
+            self.stop()
     
     def handle_client(self, client_socket, address):
         try:
@@ -48,7 +47,7 @@ class Server:
             client_key = json.loads(key_data).get('key', '')
 
             self.clients.append((client_socket, address, client_key))
-            print(f"[+] CLIENT REGISTERED")
+            print(f"[+] CLIENT FROM {address} REGISTERED")
 
             self.broadcast_message({
                 'type': 'system',
@@ -57,13 +56,19 @@ class Server:
 
             while True:
                 data = client_socket.recv(4096)
+                if not data:
+                    break
+
                 message_data = json.loads(data.decode('utf-8'))
 
-                self.broadcast_message(message_data, exclude_socket=client_socket)
+                self.broadcast_message(message_data, exclude_socket=None)
 
         except Exception as e:
-            print(f"ERROR CLIENT {client_socket}: {e}")
-        
+            print(f"[!] ERROR CLIENT {client_socket}: {e}")
+        finally:
+            self.remove_client(client_socket)
+            print(f"[-] CLIENT {address} DISCONNECTED")
+
     def broadcast_message(self, message_data, exclude_socket=None):
         disconnected = []
         for client_socket, address, key in self.clients:
@@ -84,5 +89,30 @@ class Server:
         ]
         client_socket.close()
 
+    def stop(self):
+        for client_socket, _, _ in  self.clients:
+            client_socket.close()
+        
+        if self.server_socket:
+            self.server_socket.close()
+            
+
 if __name__ == '__main__':
-    server = Server()
+
+    print("=====================================")
+    print("     DES CHAT SERVER INTERFACE     ")
+    print("=====================================")
+
+    input_host = input("ENTER HOST (default=127.0.0.1) >> ") or "127.0.0.1"
+    input_port = input("ENTER PORT (default=1234) >> ") or "1234"
+
+    try:
+        port_num = int(input_port)
+        if not (0 < port_num < 65536):
+            raise ValueError("Invalid port range")
+    except ValueError:
+        print("[!] INVALID PORT. MUST BE A NUMBER BETWEEN 1–65535.")
+        sys.exit(1)
+
+    server = Server(host=input_host, port=port_num)
+    server.start()
